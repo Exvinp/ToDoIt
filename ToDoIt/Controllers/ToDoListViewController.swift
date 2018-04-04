@@ -12,22 +12,18 @@ class ToDoListViewController: UITableViewController {
 
     var itemArray = [Item]()
     
-    let defaults = UserDefaults.standard
+    //ez egy array (ezért lehet .first) singleton object, itt hozzuk létre a Items.plist-et
+    let dataFilePath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first?.appendingPathComponent("Items.plist")
     
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        let newItem = Item()
-        newItem.title = "CsineldEzt"
-        itemArray.append(newItem)
+        loadItems()
         
-        if let items = defaults.array(forKey: "TodoListArray") as? [Item]{
-            itemArray = items
-        }
     }
 
-    
+
     
 //MARK: - Tableview Datasource Methods ////////////////////////////////////////////////////////////
     // feltölti a tableView-t a tömb elemeivel
@@ -51,29 +47,25 @@ class ToDoListViewController: UITableViewController {
     
     
 //MARK: - Tableview Delegate Methods //////////////////////////////////////////////////////////////
+    //akkor fut le amikor egy sort kiválasztunk
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
-        //print("\(itemArray[indexPath.row])")
+        print("\(itemArray[indexPath.row])")
+        print("\(itemArray[indexPath.row].title)")
         
+        //ha a kiválasztott sor done-ja false (nincs pipa) akkor rakja ki a pipát, és fordítva
         itemArray[indexPath.row].done = !itemArray[indexPath.row].done
-
-        //ha a kiválasztott sor accessoryType-ja pipa akkor vegye ki a pipát, ha semmi akkor rakja oda
-//        if tableView.cellForRow(at: indexPath)?.accessoryType == .checkmark{
-//            tableView.cellForRow(at: indexPath)?.accessoryType = .none
-//        }else{
-//            tableView.cellForRow(at: indexPath)?.accessoryType = .checkmark
-//        }
         
-        tableView.reloadData()
+        saveItems()
         
-        //amikor kiválasztjk a sort, akkor egyből deselect-álódik és eltünik a szürke kijelölés
+        //amikor kiválasztjuk a sort, akkor egyből deselect-álódik és eltünik a szürke kijelölés
         tableView.deselectRow(at: indexPath, animated: true)
         
     }
 
     
     
-//MARK: - Add New Items //////////////////////////////////////////////////////////////////////////
-    
+//MARK: - Add New Items ///////////////////////////////////////////////////////////////////////////////
+    //akkor fut le amikor a hozzáadás gomb (plusz jel) pressed
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
         
         //ez az a szöveg amit a user beír hogy hozzáadódjon a listához
@@ -83,20 +75,17 @@ class ToDoListViewController: UITableViewController {
         
         //itt adjuk hozzá a gombot
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
-            //ez fog történni amikor a user ráklikkel az "Add Item" gombra
-            //print(textField.text)
             
+            //ez fog történni amikor a user ráklikkel az "Add Item" gombra
             let newItem = Item()
             newItem.title = textField.text!
             
             self.itemArray.append(newItem)
-            
-            self.defaults.set(self.itemArray, forKey: "TodoListArray")
-            
-            self.tableView.reloadData()
+            self.saveItems()
+
         }
         
-        //ez egy closure és az alertTextField egy ideiglenes változó benne amit mi hozunk létre
+        //ez egy closure, az alertTextField egy ideiglenes változó benne amit mi hozunk létre
         alert.addTextField { (alertTextField) in
             alertTextField.placeholder = "Create new Item"
             textField = alertTextField
@@ -112,11 +101,37 @@ class ToDoListViewController: UITableViewController {
     
     
     
+//MARK: - Model Manipulation Methods ///////////////////////////////////////////////////////////////
+    
+    func saveItems(){
+        
+        let encoder = PropertyListEncoder()
+        
+        do {
+            let data = try encoder.encode(itemArray)
+            try data.write(to: dataFilePath!)
+        }catch{
+            print("Error encoding item array \(error)")
+        }
+        
+        self.tableView.reloadData()
+        
+        
+    }
     
     
     
-    
-    
+    func loadItems(){
+        if let data = try? Data(contentsOf: dataFilePath!){
+            let decoder = PropertyListDecoder()
+            
+            do{
+                itemArray = try decoder.decode([Item].self, from: data)
+            } catch{
+                print(error)
+            }
+        }
+    }
     
     
     
