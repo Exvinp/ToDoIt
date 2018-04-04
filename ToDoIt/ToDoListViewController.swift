@@ -10,7 +10,7 @@ import UIKit
 
 class ToDoListViewController: UITableViewController {
 
-    let itemArray = ["Megcsinálni 1", "Megcsinálni 2", "Dodoit3"]
+    var itemArray = ["Megcsinálni 1", "Megcsinálni 2", "Dodoit3"]
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -53,7 +53,59 @@ class ToDoListViewController: UITableViewController {
 
     
     
+//MARK: - Add New Items //////////////////////////////////////////////////////////////////////////
+    
+    @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
+        
+        //ez az a szöveg amit a user beír hogy hozzáadódjon a listához
+        var textField = UITextField()
+        
+        let alert = UIAlertController(title: "Add New ToDoIt Item", message: "", preferredStyle: .alert)
+        
+        //itt adjuk hozzá a gombot
+        let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
+            //ez fog történni amikor a user ráklikkel az "Add Item" gombra
+            //print(textField.text)
+            self.itemArray.append(textField.text!)
+            self.tableView.reloadData()
+        }
+        
+        //ez egy closure és az alertTextField egy ideiglenes változó benne amit mi hozunk létre
+        alert.addTextField { (alertTextField) in
+            alertTextField.placeholder = "Create new Item"
+            textField = alertTextField
+        }
+        //itt adjuk hozzá az alert felugró ablakhoz az action gombot
+        alert.addAction(action)
+        
+        present(alert, animated: true, completion: nil)
+        
+    }
     
 
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }
 
