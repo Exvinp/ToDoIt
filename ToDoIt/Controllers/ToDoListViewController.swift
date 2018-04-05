@@ -11,17 +11,21 @@ import CoreData
 
 class ToDoListViewController: UITableViewController {
 
+    
     var itemArray = [Item]()
     
-    //ezzel a kóddal az AppDelegate classból csinálunk egy object-et, persistentContainer property-jének viewContext porperty-je
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
+    // opcionális, nincs értéke, de ahogy értéket kap a didSet-ben lévő utasítások lefutnak
+    var selectedCategory: Category?{
+        didSet{
+            loadItems()
+        }
+    }
     
-
+    //ezzel a kóddal az AppDelegate classból csinálunk egy singleton(.shared miatt) object-et, persistentContainer property-jének viewContext porperty-je
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        loadItems()
-        
     }
 
 
@@ -85,6 +89,7 @@ class ToDoListViewController: UITableViewController {
             let newItem = Item(context: self.context)
             newItem.title = textField.text!
             newItem.done = false
+            newItem.parentCategory = self.selectedCategory
             self.itemArray.append(newItem)
             self.saveItems()
         }
@@ -114,24 +119,36 @@ class ToDoListViewController: UITableViewController {
         }catch{
             print(error)
         }
-        
         self.tableView.reloadData()
-
     }
     
     
-    //with külső paraméter, request a belső paraméter
-    //ha a request paraméter nincs megadva a híváskor akkor az alapértelmezett értéke az Item DB fetchRequest() metódusa
-    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest()){
+    
+        //with külső paraméter, request a belső paraméter
+        //ha a request paraméter nincs megadva a híváskor akkor az alapértelmezett értéke az Item DB fetchRequest() metódusa
+        //NSPredicate: a lekérdezés típusa
+    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil){
         
-        //a request object típusa NSFetchRequest<Item>, az Item DB fetchRequest()-jét hívja meg
-        //let request: NSFetchRequest<Item> = Item.fetchRequest()
+        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
+        
+        //optional binding, csak akkor fut le ha predicate nem nil, nem az akkor egy kombinált lekérdezés megy vége, azaz egy kategórián belül keresünk
+        if let additionalPredicate = predicate {
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
+        }else{
+            //ha nil az értéke akkor a kategóriákat kell megjeleníteni
+            request.predicate = categoryPredicate
+        }
+        
+//        let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, predicate])
+//        request.predicate = compoundPredicate
+        
         
         do{
             itemArray = try context.fetch(request)
         }catch{
             print(error)
         }
+        tableView.reloadData()
     }
 
 
@@ -155,7 +172,8 @@ extension ToDoListViewController: UISearchBarDelegate{
         //
         //maga a lekérdezés request predicate metódusa a predicate object-tel történjen
         //request.predicate = predicate
-        request.predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
+        //a legfrissebb a verzióban a predicate-et a loadItems-nek paraméterként adjuk át
+        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
         
         
         //sorting (rendezés), titile szerint, abc sorrendben
@@ -165,7 +183,7 @@ extension ToDoListViewController: UISearchBarDelegate{
         //request.sortDescriptors = [sortDescriptr]
         request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
         
-        loadItems(with: request)
+        loadItems(with: request, predicate: predicate)
 
     }
     

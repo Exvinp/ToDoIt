@@ -96,8 +96,20 @@ class CategoryViewController: UITableViewController {
     }
     
 //MARK: - Tableview Delegate Methods //////////////////////////////////////////////////////////////
+    override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        performSegue(withIdentifier: "goToItems", sender: self)
+    }
     
     
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        let destinationVC = segue.destination as! ToDoListViewController
+        
+        //a tableView.indexPathForSelectedRow mutatja meg melyik az a sor ami ki van választva
+        if let indexPath99 = tableView.indexPathForSelectedRow{
+            destinationVC.selectedCategory = categories[indexPath99.row]
+        }
+        
+    }
     
     
 
