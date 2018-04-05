@@ -123,19 +123,20 @@ class ToDoListViewController: UITableViewController {
     }
     
     
-    
-        //with külső paraméter, request a belső paraméter
-        //ha a request paraméter nincs megadva a híváskor akkor az alapértelmezett értéke az Item DB fetchRequest() metódusa
-        //NSPredicate: a lekérdezés típusa
+//TODO: loadItems()!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    //with külső paraméter, request a belső paraméter
+    //ha a request paraméter nincs megadva a híváskor akkor az alapértelmezett értéke az Item DB fetchRequest() metódusa
+    //NSPredicate: a lekérdezés típusa
     func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil){
         
         let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
         
-        //optional binding, csak akkor fut le ha predicate nem nil, nem az akkor egy kombinált lekérdezés megy vége, azaz egy kategórián belül keresünk
+        //optional binding, csak akkor fut le ha a loadItems meghívásakor predicate paraméter nem nil
+        //ebben az esetben egy kombinált lekérdezés megy vége, azaz egy kategórián belül keresünk Itme-re
         if let additionalPredicate = predicate {
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
         }else{
-            //ha nil az értéke akkor a kategóriákat kell megjeleníteni
+            //ha nil az értéke akkor a kategóriákat kell lekérdezni, azaz a request object predicate properiy-jének értéke a kategória neve lesz
             request.predicate = categoryPredicate
         }
         
@@ -144,6 +145,7 @@ class ToDoListViewController: UITableViewController {
         
         
         do{
+            //ez maga a lekérdezés
             itemArray = try context.fetch(request)
         }catch{
             print(error)
@@ -168,18 +170,13 @@ extension ToDoListViewController: UISearchBarDelegate{
 
         //lekérdezés object, NSPredicate fv, title-ben keressük, CONTAINS = tartalmazza, [cd] nem case(Aa) és diacritic(aá) sensitive, %@ amit keresünk
         //searchBar.text ahonnan jön amit keresünk
-        //let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
-        //
-        //maga a lekérdezés request predicate metódusa a predicate object-tel történjen
-        //request.predicate = predicate
-        //a legfrissebb a verzióban a predicate-et a loadItems-nek paraméterként adjuk át
         let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
         
         
         //sorting (rendezés), titile szerint, abc sorrendben
         //let sortDescriptr = NSSortDescriptor(key: "title", ascending: true)
         //
-        //egy array-t vár el a sortDescriptors, ezért egy single array-t kap amiben a sortDescriptr van, de ezt a kettő utasítást egyban is meg lehet adni
+        //egy array-t vár el a sortDescriptors, ezért egy single array-t kap amiben a sortDescriptr van, de ezt a kettő utasítást egyben is meg lehet adni
         //request.sortDescriptors = [sortDescriptr]
         request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
         
@@ -188,7 +185,7 @@ extension ToDoListViewController: UISearchBarDelegate{
     }
     
     
-    //akkor amikor a searchBar-ban lévő elemek száma 0-ra változik (azaz nem betöltéskor) akkor vissza viszi a usert
+    //akkor amikor a searchBar-ban lévő elemek száma 0-ra változik (azaz nem betöltéskor) akkor vissza viszi a user-t
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
         if searchBar.text?.count == 0{
             loadItems()
