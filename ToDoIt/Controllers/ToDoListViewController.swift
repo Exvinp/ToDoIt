@@ -7,22 +7,28 @@
 //
 
 import UIKit
-import CoreData
+import RealmSwift
 
 class ToDoListViewController: UITableViewController {
+    
+    //object tömb: olyan object amiben tömbök vannak, és azok a tömbök is object-ek
+    //tömb object: olyan tömb ami object, de minden tömb object ezért enek nincs értelme
 
+    //a todoItems egy object-ekből álló tömb lesz, ami lehet nil is
+    //a Realm RUD műveletek Result típusú konténerrel (object) térnek vissza, a konténer az Item tábla felépítését követi
+    //a műveletek végén az Item táblában lévő rekordokból képzett object-eket fogja tárolni
+    var todoItems: Results<Item>?
     
-    var itemArray = [Item]()
+    //a Realm class object-je a realm, ez egy új access point a Realm DB-hez
+    var realm = try! Realm()
     
-    // opcionális, nincs értéke, de ahogy értéket kap a didSet-ben lévő utasítások lefutnak
+    //a CategoryView-ban kiválasztott kategória elemet mint object-et tartalmazza a selectedCategory
     var selectedCategory: Category?{
+        //opcionális, nincs értéke(Category?), de ahogy értéket kap a didSet-ben lévő utasítások lefutnak
         didSet{
             loadItems()
         }
     }
-    
-    //ezzel a kóddal az AppDelegate classból csinálunk egy singleton(.shared miatt) object-et, persistentContainer property-jének viewContext porperty-je
-    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -31,67 +37,117 @@ class ToDoListViewController: UITableViewController {
 
     
 //MARK: - Tableview Datasource Methods ////////////////////////////////////////////////////////////
-    // feltölti a tableView-t a tömb elemeivel
-    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return itemArray.count
-    }
     
+    //megadja hány sornak kell lennie a TableView-ban, azaz beállítja a cellForRowAt-nak az i-t ([indexPath.row]), hogy hányszor kell lefutnia, azaz hányszor kell cellát generálnia
+    override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        
+        //nil coalescing operator, visszaadja az item-ek számát (= a kategóriában hány feladat van), ha nil az értéke akkor 1-t ad vissza
+        return todoItems?.count ?? 1
+    }
+   
+    
+    //a cellákat egyesével feltölti
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         
+        //létrehoz egy újrafelhasználható cellát aminek az azonosítója ToDoItemCell ami a TableView-hoz köti
         let cell = tableView.dequeueReusableCell(withIdentifier: "ToDoItemCell", for: indexPath)
         
-        let item = itemArray[indexPath.row]
-        
-        cell.textLabel?.text = item.title
-        
-        cell.accessoryType = item.done ? .checkmark : .none
-        
+        //ha van item object a todoItems object tömbben ([indexPath.row] = i, tehát nem nil), akkor az i-ediket hozzárendeli az item object-hez
+        if let item = todoItems?[indexPath.row]{
+            
+            //a cellának megadja text-nek a title-t
+            cell.textLabel?.text = item.title
+            
+            //a cella accessoryType-ja egy pipát kap ha az elem done property-je igaz, ha nem igaz akkor semmit (.none) Ternary operator
+            cell.accessoryType = item.done ? .checkmark : .none
+        }else{
+            
+            //ha nincs item object a todoItems object tömbben, akkor a numberOfRowsInSection miatt csak egyszer fut le
+            //és így annak az egy létrejött cellának a szövege az lesz, hogy No Items Added
+            cell.textLabel?.text = "No Items Added"
+        }
+
         return cell
     }
 
     
     
 //MARK: - Tableview Delegate Methods //////////////////////////////////////////////////////////////
+    
     //akkor fut le amikor egy sort kiválasztunk
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         
-        //itemArray[indexPath.row].setValue("Completed", forKey: "title")
+        //ha a sor amire ráklikkeltünk egy feladat (tehát nem a "No Items Added" cella), akkor a feladat object-je betöltődik az otem object-be
+        if let item = todoItems?[indexPath.row]{
+            do{
+                //a write utasítással tudjuk a RUD műveleteket előkészíteni (read, update, destroy)
+                try realm.write{
+                    
+                    //az object done property-jének értékét megváltoztatja az ellenkezőjére (true/false)
+                    item.done = !item.done
+                    
+                    //törli az adott kiválasztott itemet
+                    //realm.delete(item)
+                }
+            }catch{
+                print("Error saving done status \(error)")
+            }
+            
+        }
+        //a reloadData() fv automatikusan a Tableview Datasource Method-okat hívja meg, amik újratöltik cellákkal a tableView-t
+        tableView.reloadData()
         
-        //törlés, az első a DB-ből törli, a második a tableview-ból, fontos a sorrend!!!!
-        //context.delete(itemArray[indexPath.row])
-        //itemArray.remove(at: indexPath.row)
-        
-        
-        //ha a kiválasztott sor done-ja false (nincs pipa) akkor rakja ki a pipát, és fordítva
-        itemArray[indexPath.row].done = !itemArray[indexPath.row].done
-        
-        saveItems()
-        
-        //amikor kiválasztjuk a sort, akkor egyből deselect-álódik és eltünik a szürke kijelölés
+        //amikor ráklikkelünk a sorra akkor az utasítások végén deselect-álja (eltünteti a kijelölést)
         tableView.deselectRow(at: indexPath, animated: true)
-        
     }
 
     
     
 //MARK: - Add New Items //////////////////////////////////////////////////////////////////////////////////
-    //akkor fut le amikor a hozzáadás gomb (plusz jel) pressed
+    
+    //akkor fut le amikor a hozzáadás gombot (plusz jel) megnyomjuk
     @IBAction func addButtonPressed(_ sender: UIBarButtonItem) {
         
         //ez az a szöveg amit a user beír hogy hozzáadódjon a listához
         var textField = UITextField()
         
+        //ez a felugró ablak címét, és stílusát határozza meg
         let alert = UIAlertController(title: "Add New ToDoIt Item", message: "", preferredStyle: .alert)
         
-        //itt adjuk hozzá a gombot
+        //add gomb szövege és stílusa
         let action = UIAlertAction(title: "Add Item", style: .default) { (action) in
-            //ez fog történni amikor a user ráklikkel az "Add Item" gombra
-            let newItem = Item(context: self.context)
-            newItem.title = textField.text!
-            newItem.done = false
-            newItem.parentCategory = self.selectedCategory
-            self.itemArray.append(newItem)
-            self.saveItems()
+            
+            //ez fog történni amikor a user ráklikkel az "Add Item" gombra, ez egy closure (fv a UIAlertAction fv-ben)
+            
+            //amikor a user ráklikkel az "Add Item" gombra megnézzük, hogy ki van-e választva kategória object,
+            //mert ha nincs akkor a hozzáadott item-et (feladatot) nem tudjuk kategóriához kötni,
+            //ha nem nil akkor a currentCategory objectnek adjuk át a kiválasztott kategória object-et
+            if let currentCategory = self.selectedCategory{
+                
+                do{
+                    //megpróbál hozzáférni a DB-hez
+                    try self.realm.write{
+                        
+                        //létrehoz egy új object-et aminek a típusa az Item tábla felépítését kapja, mert az Item() class a szülője
+                        let newItem = Item()
+                        
+                        //az új object titel-je a beírt szöveg lesz
+                        newItem.title = textField.text!
+                        
+                        //az új object dateCreated property-jének értéke a létrehozás dátuma
+                        newItem.dateCreated = Date()
+                        
+                        //a kiválasztott kategória object, items object tömb-jéhez adja hozzá az append-el az új object-et (newItem)
+                        //az items egy olyan object(a kategóriához tartozó feladat) amiben a rekordok(feladat neve, létrehozásának ideje) object-ként szerepelnek
+                        currentCategory.items.append(newItem)
+                    }
+                }catch{
+                    print("Error saving new Item, \(error)")
+                }
+            }
+            
+            //a reloadData() fv automatikusan a Tableview Datasource Method-okat hívja meg, amik újratöltik cellákkal a tableView-t
+            self.tableView.reloadData()
         }
         
         //ez egy closure, az alertTextField egy ideiglenes változó benne amit mi hozunk létre
@@ -112,44 +168,14 @@ class ToDoListViewController: UITableViewController {
     
     
 //MARK: - Model Manipulation Methods ///////////////////////////////////////////////////////////////
-    
-    func saveItems(){
-        do {
-            try context.save()
-        }catch{
-            print(error)
-        }
-        self.tableView.reloadData()
-    }
-    
-    
-//TODO: loadItems()!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    //with külső paraméter, request a belső paraméter
-    //ha a request paraméter nincs megadva a híváskor akkor az alapértelmezett értéke az Item DB fetchRequest() metódusa
-    //NSPredicate: a lekérdezés típusa
-    func loadItems(with request: NSFetchRequest<Item> = Item.fetchRequest(), predicate: NSPredicate? = nil){
+
+    func loadItems(){
+        //a todoItems tömböt feltölti a selectedCategory object items object-jeivel
+        //gyakorlatilag egy objectet(todoItems) tölt fel egy másik object-ben(selectedCategory) lévő object-ekkel(items), és rendezi őket nevük (title) szerint abc sorrendbe
+        //a selectedCategory-ban lévő items gyakorlatilag csak egy reference az Item tábla azon rekordjaira amik az adott selectedCategory-hoz kapcsolódnak, a rekordokból object-ek lesznek
+        todoItems = selectedCategory?.items.sorted(byKeyPath: "title", ascending: true)
         
-        let categoryPredicate = NSPredicate(format: "parentCategory.name MATCHES %@", selectedCategory!.name!)
-        
-        //optional binding, csak akkor fut le ha a loadItems meghívásakor predicate paraméter nem nil
-        //ebben az esetben egy kombinált lekérdezés megy vége, azaz egy kategórián belül keresünk Itme-re
-        if let additionalPredicate = predicate {
-            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, additionalPredicate])
-        }else{
-            //ha nil az értéke akkor a kategóriákat kell lekérdezni, azaz a request object predicate properiy-jének értéke a kategória neve lesz
-            request.predicate = categoryPredicate
-        }
-        
-//        let compoundPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [categoryPredicate, predicate])
-//        request.predicate = compoundPredicate
-        
-        
-        do{
-            //ez maga a lekérdezés
-            itemArray = try context.fetch(request)
-        }catch{
-            print(error)
-        }
+        //a reloadData() fv automatikusan a Tableview Datasource Method-okat hívja meg, amik újratöltik cellákkal a tableView-t
         tableView.reloadData()
     }
 
@@ -159,49 +185,44 @@ class ToDoListViewController: UITableViewController {
 
 
 //MARK: - Search bar methods ////////////////////////////////////////////////////////////////////////////
+
 extension ToDoListViewController: UISearchBarDelegate{
-    
-    
+
+    //akkor fut le amikor a search gombra klikkelünk
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
+        //a todoItems object object-jeinek titlte property értékeit szűri (filter)
+        //hogy tartalmazzák-e (CONTAINS[cd]) [c]case(Aa) és [d]diacritic(aá) insensitive-en (ezektől függetlenül)
+        //a keresett kifejezést (%@), aminek a forrását a második paraméter adja meg (searchBar.text!)
+        //az eredményeket rendezi (sort) az objectek dateCreated property-je szerint
+        todoItems = todoItems?.filter("title CONTAINS[cd] %@", searchBar.text!).sorted(byKeyPath: "dateCreated", ascending: true)
         
-        //a request object típusa NSFetchRequest<Item>, az Item DB fetchRequest()-jét hívja meg
-        let request: NSFetchRequest<Item> = Item.fetchRequest()
-        
-
-        //lekérdezés object, NSPredicate fv, title-ben keressük, CONTAINS = tartalmazza, [cd] nem case(Aa) és diacritic(aá) sensitive, %@ amit keresünk
-        //searchBar.text ahonnan jön amit keresünk
-        let predicate = NSPredicate(format: "title CONTAINS[cd] %@", searchBar.text!)
-        
-        
-        //sorting (rendezés), titile szerint, abc sorrendben
-        //let sortDescriptr = NSSortDescriptor(key: "title", ascending: true)
-        //
-        //egy array-t vár el a sortDescriptors, ezért egy single array-t kap amiben a sortDescriptr van, de ezt a kettő utasítást egyben is meg lehet adni
-        //request.sortDescriptors = [sortDescriptr]
-        request.sortDescriptors = [NSSortDescriptor(key: "title", ascending: true)]
-        
-        loadItems(with: request, predicate: predicate)
-
+        //a reloadData() fv automatikusan a Tableview Datasource Method-okat hívja meg, amik újratöltik cellákkal a tableView-t
+        tableView.reloadData()
     }
-    
-    
-    //akkor amikor a searchBar-ban lévő elemek száma 0-ra változik (azaz nem betöltéskor) akkor vissza viszi a user-t
+
+
+    //akkor aktiválódik amikor a serachBar karaktereinek száma változik (de betöltődéskor nem aktiválódik amikor nil-ból 1 lesz)
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
+        
+        //ha a serachBar karaktereinek száma x-ről 0-ra vált (kitröljük őket, vagy rányomunk az X-re oldalt)
         if searchBar.text?.count == 0{
-            loadItems()
             
+            //újratöltjük az elemeket
+            loadItems()
+
             //a DispatchQueue az aktív eszközök kikapcsolását szabályozó rendszer, különböző thread-ekbe tudja sorolni a folyamatot
-            //mia main thread-be akarjuk kinyirnia billentyűt (hogy gyors legyen)
+            //mi a main thread-be akarjuk kinyirni a folyamatot hogy gyors legyen
             DispatchQueue.main.async {
-                //megszünik fő beszélőnek lenni
+                
+                //a searchBar megszünik fő beszélőnek lenni, eltünik róla a focus, és a billentyű
                 searchBar.resignFirstResponder()
             }
         }
     }
-    
-    
-    
-    
+
+
+
+
 }
 
 
